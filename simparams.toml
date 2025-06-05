@@ -1,0 +1,29 @@
+# decaysim
+# Parameters and settings
+
+[params]
+
+tau_seed = 23.08  # in [s]
+
+timestep = 0.08388603705034903  # in [s]
+n_sim_steps = 477 # timestep * n_sim_steps ~ 40 s
+
+n_sim = 32  # number of simulated decays
+n_trials = 1 # e.g. 1000
+
+n_decay_steps = 0  # either 0 or 1
+
+mean_ion = 9.44e-7
+stdv_ion = 7.7408e-8 # MEAN_ION * 0.082
+
+mean_bkgnd = 5.44e-7
+stdv_bkgnd = 2.06e-8 # MEAN_BKGND * 0.038
+
+empty_shots = false
+empty_shots_probability = 0.0
+
+
+[settings]
+
+output_path = "."
+plot_every_event = false # expect long simulation times if set to true
