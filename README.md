@@ -1,9 +1,10 @@
 # decaysim
 
-A decay simulator.
+A particle decay time simulator for investigation of the spectral add up method
 
 
 ## Motivation
+
 
 
 ## Installation
@@ -41,6 +42,9 @@ The simulation is setup using a toml file. The following are the description of 
 | stdv_bkgnd | float | Any positive number | 2.06e-8 | Error in background noise level |
 | empty_shots | bool | true or false | false | Includes empty shots in simulation |
 | empty_shots_probability | float | 0.0 - 1.0 | 0.0 | Probability of an empty shot occurring |
+| tasks | list | 'addup', 'distro', 'mle' | 'addup' | What to simulate |
 | output_path | str | Valid directory path | "." | Directory for storing results |
 | plot_every_event | bool | true or false | false | Determines if every event should be plotted (high computation cost) |
+| save_npz | bool | true or false | false | Whether or not to save data as binary files |
+| plot_titles | bool | true or false | false | Whether plots should have a title |
 
