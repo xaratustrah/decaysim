@@ -25,7 +25,7 @@ empty_shots_probability = 0.0
 
 [settings]
 
-tasks = ['distro',] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
+tasks = ['addup',] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
 output_path = "./out"
 plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
 save_npz = false

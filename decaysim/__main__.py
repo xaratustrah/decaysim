@@ -273,7 +273,7 @@ class Simulator:
             logger.warning(f"{e}. Ignoring...")
             self.simulation_error_flag = True
 
-    def fit_and_plot_gaussian(self, xvals, yvals, bins=100, title=""):
+    def fit_and_plot_gaussian(self, xvals, yvals, bins=100, id_string=""):
         counts, bin_edges = np.histogram(yvals, bins=bins)  # Binning y values
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2  # Compute bin centers
 
@@ -297,7 +297,7 @@ class Simulator:
 
             # Plot results
             plt.figure(figsize=(8, 5))
-            plt.hist(yvals, bins=bins, alpha=0.6, label=title)
+            plt.hist(yvals, bins=bins, alpha=0.6, label=id_string)
             plt.plot(x_fit, y_fit, color="red", label="Fit", linewidth=2)
             # plt.xlabel("X values")
             plt.xlabel(
@@ -309,7 +309,7 @@ class Simulator:
             plt.legend()
 
             # Save plot
-            outfilename = f"{self.settings_output_path}{title}"
+            outfilename = f"{self.settings_output_path}{id_string}"
             plt.tight_layout()
             plt.savefig(outfilename + ".png")
             plt.close()
@@ -370,14 +370,14 @@ class Simulator:
                     
             logger.info("Creating tau_tru distribution from add up spectra.")
             popt = self.fit_and_plot_gaussian(
-                xvals, self.params_tau_seed - tau_events_arr, title="tau_tru_from_addup"
+                xvals, self.params_tau_seed - tau_events_arr, id_string="tau_tru_from_addup"
             )
             sigma_tru_from_addup = popt[2]
             logger.info(f"Sigma_tru from add up is = {sigma_tru_from_addup}")
 
             logger.info("Creating sigma distribution from add up spectra.")
             popt = self.fit_and_plot_gaussian(
-                xvals, sigma_events_arr, title="sigma_from_addup"
+                xvals, sigma_events_arr, id_string="sigma_from_addup"
             )
             mean_of_sigmas_from_addup = popt[1]
             logger.info(f"Mean of sigmas from addup is = {mean_of_sigmas_from_addup}")
@@ -387,7 +387,7 @@ class Simulator:
 
             logger.info("Creating rho distribion from add up.")
             self.fit_and_plot_gaussian(
-                xvals, sigma_events_arr / sigma_tru_from_addup, title="rho_from_addup"
+                xvals, sigma_events_arr / sigma_tru_from_addup, id_string="rho_from_addup"
             )
 
         if 'distro' in self.settings_tasks:
@@ -407,12 +407,12 @@ class Simulator:
                     continue
 
             logger.info('Creating tau_tru from binned exponential distribution.')
-            popt = self.fit_and_plot_gaussian(xvals, self.params_tau_seed - tau_distro_arr, title = 'tau_tru_from_distro')
+            popt = self.fit_and_plot_gaussian(xvals, self.params_tau_seed - tau_distro_arr, id_string = 'tau_tru_from_distro')
             sigma_tru_from_distro = popt[2]
             logger.info(f'Sigma_tru from distro is = {sigma_tru_from_distro}')
 
             logger.info('Creating sigma distribution from binned exponential distribution.')
-            popt = self.fit_and_plot_gaussian(xvals, sigma_distro_arr, title='sigma_from_distro')
+            popt = self.fit_and_plot_gaussian(xvals, sigma_distro_arr, id_string='sigma_from_distro')
             mean_of_sigmas_from_distro = popt[1]
             logger.info(f'Mean of sigmas from distro = {mean_of_sigmas_from_distro}')
 
@@ -420,7 +420,7 @@ class Simulator:
             logger.info(f'rho from distro = {rho_from_distro}')
 
             logger.info('Creating rho distribion from distro.')
-            self.fit_and_plot_gaussian(xvals, sigma_distro_arr / sigma_tru_from_distro, title = 'rho_from_distro')
+            self.fit_and_plot_gaussian(xvals, sigma_distro_arr / sigma_tru_from_distro, id_string = 'rho_from_distro')
 
         if 'mle' in self.settings_tasks:
             logger.info('Performing simulation task: mle')
@@ -434,7 +434,7 @@ class Simulator:
 
             logger.info("Creating tau_tru from unbinned MLE distribion.")
             self.fit_and_plot_gaussian(
-            xvals, self.params_tau_seed - tau_mle_arr, title="tau_tru_from_mle"
+            xvals, self.params_tau_seed - tau_mle_arr, id_string="tau_tru_from_mle"
             )
     
 
