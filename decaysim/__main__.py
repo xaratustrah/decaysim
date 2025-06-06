@@ -290,7 +290,7 @@ class Simulator:
             popt, _ = curve_fit(
                 Simulator.gaussian_function, bin_centers, counts, p0=initial_guess
             )
-
+            
             # Generate fitted curve
             x_fit = np.linspace(min(bin_centers), max(bin_centers), 100)
             y_fit = Simulator.gaussian_function(x_fit, *popt)
