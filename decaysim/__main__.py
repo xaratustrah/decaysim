@@ -207,7 +207,11 @@ class Simulator:
             title=title,
         )
         ax.grid()
-        ax.legend(loc="upper right", shadow=False)
+        legend = ax.legend(loc="upper right", shadow=False)
+        
+        for text in legend.get_texts():
+            text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
+        
         plt.tight_layout()
         plt.savefig(outfilename + ".png")
         plt.close()
@@ -253,7 +257,10 @@ class Simulator:
                 title=title
             )
 
-            ax.legend(loc="upper right", shadow=False)
+            legend = ax.legend(loc="upper right", shadow=False)
+            for text in legend.get_texts():
+                text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
+
             ax.grid()
             outfilename = f"{self.settings_output_path}{title}"
             plt.tight_layout()

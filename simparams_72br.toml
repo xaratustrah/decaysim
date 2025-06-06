@@ -9,7 +9,7 @@ timestep = 0.671  # in [s]
 n_sim_steps = 205 # or 26 or 210 = timestep * n_sim_steps ~ 17.5 s
 
 n_sim = 32  # 32 number of simulated decays
-n_trials = 100 # 10000
+n_trials = 10 # 10000
 
 n_decay_steps = 0  # either 0 or 1
 
