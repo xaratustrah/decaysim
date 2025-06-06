@@ -29,4 +29,4 @@ tasks = ['addup',] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
 output_path = "./out"
 plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
 save_npz = false
-plot_titles = true # turn plot titles on or off
+plot_titles = false # turn plot titles on or off

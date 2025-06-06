@@ -192,7 +192,7 @@ class Simulator:
         ax.step(x, y, label=id_string, where="post")
         yfit = Simulator.exponential_function(x, *popt)
         if display_fit:
-            ax.plot(x, yfit, label="fit", alpha=0.6, color="#DC143C")  # color Crimson
+            ax.plot(x, yfit, label=fr'$\tau =$ {popt[1]:0.2e}', alpha=0.6, color="#DC143C")  # color Crimson
         
         outfilename = f"{self.settings_output_path}{id_string}_ts{self.params_tau_seed:.2e}_t{popt[1]:.2e}"
 
@@ -207,8 +207,7 @@ class Simulator:
             title=title,
         )
         ax.grid()
-        legend = ax.legend(loc="upper right", shadow=False)
-        
+        legend = ax.legend()
         for text in legend.get_texts():
             text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
         
@@ -244,7 +243,8 @@ class Simulator:
             ax = fig.gca()
             ax.step(xvals, hist, label=title, where="post")
 
-            ax.plot(xvals, yfit, label="fit", alpha=0.6, color="#DC143C")
+            fit_line_label = fr'$\mu =$ {popt[1]:0.2e}' + "\n" + fr'$\sigma =$ {abs(popt[2]):.2e}'
+            ax.plot(xvals, yfit, label=fit_line_label, alpha=0.6, color="#DC143C")
             
             if self.settings_plot_titles:
                 title=r'$\tau - \tau_{seed}$ [s]'
@@ -257,7 +257,7 @@ class Simulator:
                 title=title
             )
 
-            legend = ax.legend(loc="upper right", shadow=False)
+            legend = ax.legend()
             for text in legend.get_texts():
                 text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
 
@@ -296,17 +296,21 @@ class Simulator:
             y_fit = Simulator.gaussian_function(x_fit, *popt)
 
             # Plot results
-            plt.figure(figsize=(8, 5))
-            plt.hist(yvals, bins=bins, alpha=0.6, label=id_string)
-            plt.plot(x_fit, y_fit, color="red", label="Fit", linewidth=2)
-            # plt.xlabel("X values")
-            plt.xlabel(
-                f"amp = {popt[0]:.2e}, mean = {popt[1]:.2e}, sigma = {abs(popt[2]):.2e}"
-            )
+            fig = plt.figure(figsize=(8, 5))
+            ax = fig.gca()
+            ax.hist(yvals, bins=bins, alpha=0.6, label=id_string)
+            fit_line_label = fr'$\mu =$ {popt[1]:0.2e}' + "\n" + fr'$\sigma =$ {abs(popt[2]):.2e}'
+            ax.plot(x_fit, y_fit, color="red", label=fit_line_label, linewidth=2)
+
             if self.settings_plot_titles:
                 plt.title("Gaussian Fit")
+                plt.xlabel(
+                    f"amp = {popt[0]:.2e}, mean = {popt[1]:.2e}, sigma = {abs(popt[2]):.2e}"
+                )
                 
-            plt.legend()
+            legend = ax.legend()
+            for text in legend.get_texts():
+                text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
 
             # Save plot
             outfilename = f"{self.settings_output_path}{id_string}"
