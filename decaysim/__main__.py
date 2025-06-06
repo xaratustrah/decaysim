@@ -186,15 +186,15 @@ class Simulator:
         popt, pcov = curve_fit(Simulator.exponential_function, x, y, p0=p)
         return popt, pcov
 
-    def plot_time_and_fit(self, x, y, popt, title="", display_fit=True):
+    def plot_time_and_fit(self, x, y, popt, id_string="", display_fit=True):
         fig = plt.figure()
         ax = fig.gca()
-        ax.step(x, y, label=title, where="post")
+        ax.step(x, y, label=id_string, where="post")
         yfit = Simulator.exponential_function(x, *popt)
         if display_fit:
             ax.plot(x, yfit, label="fit", alpha=0.6, color="#DC143C")  # color Crimson
         
-        outfilename = f"{self.settings_output_path}{title}_ts{self.params_tau_seed:.2e}_t{popt[1]:.2e}"
+        outfilename = f"{self.settings_output_path}{id_string}_ts{self.params_tau_seed:.2e}_t{popt[1]:.2e}"
 
         if self.settings_plot_titles:
             title = r'$\tau_{seed} =$' + f"{self.params_tau_seed:0.2e}" + ' [s], ' + r'$\tau =$' + f'{popt[1]:0.2e}'
@@ -360,7 +360,7 @@ class Simulator:
                         x,
                         y1,
                         popt_events,
-                        title=f"trial-{trial_number:04}_from_events",
+                        id_string=f"trial-{trial_number:04}_from_events",
                         display_fit=True,
                     )
 
@@ -400,7 +400,7 @@ class Simulator:
                     sigma_distro_arr[trial_number] = np.sqrt(pcov_distro[1,1]) # get error of taus from distro
 
                     self.plot_time_and_fit(
-                        x, y2, popt_distro, title=f'trial-{trial_number:04}_from_distro', display_fit=True)
+                        x, y2, popt_distro, id_string=f'trial-{trial_number:04}_from_distro', display_fit=True)
 
                 except (FloatingPointError, OptimizeWarning) as e:
                     logger.warning(e)
