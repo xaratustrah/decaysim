@@ -59,8 +59,6 @@ class Simulator:
         logger.info("Simulation start. Enter command or ctrl-C to abort.")
         logger.info(f"Output file path: {self.settings_output_path}")
 
-        self.simulation_error_flag = False
-
     @staticmethod
     def gaussian_function(x, *p):
         return p[0] * np.exp(-((x - p[1]) ** 2) / (2.0 * p[2] ** 2))
@@ -270,8 +268,8 @@ class Simulator:
                 np.savez(outfilename + ".npz", x_fit=x_fit, y_fit=y_fit, yvals=yvals)
 
         except Exception as e:
-            logger.warning(f"{e}. Ignoring...")
-            self.simulation_error_flag = True
+            logger.error(f"{e}. Can't continue any more. Please rerun the simulation.")
+            sys.exit(1)
 
         return popt  # Returns (A, mu, sigma)
 
@@ -421,11 +419,6 @@ class Simulator:
         plt.savefig(outfilename + ".png", dpi=300)
         plt.savefig(outfilename + ".svg")
         plt.close()
-
-        if self.simulation_error_flag:
-            logger.warning(
-                "There were some errors during the simulation. You might need to start again."
-            )
 
 # -----------------
 
