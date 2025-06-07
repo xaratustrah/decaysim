@@ -220,62 +220,6 @@ class Simulator:
         if self.settings_save_npz:
             np.savez(outfilename + ".npz", x=x, y=y, yfit=yfit)
 
-    def fit_gauss_to_result_array(self, xvals, yvals, mu_est, sigma_est, title=""):
-        hist = np.histogram(
-            yvals,
-            bins=1000,
-            range=(-2 * self.params_tau_seed, 2 * self.params_tau_seed),
-        )[0]
-
-        print(hist)
-        A_initial = max(hist)
-        mu_initial = xvals[np.argmax(hist)]
-        sigma_initial = np.std(hist)
-
-        initial_guess = [A_initial, mu_initial, sigma_initial]
-        print(initial_guess)
-
-        # p = [1, mu_est, sigma_est]
-
-        try:
-            popt, pcov = curve_fit(
-                Simulator.gaussian_function, xvals, hist, p0=initial_guess
-            )
-            yfit = Simulator.gaussian_function(xvals, *popt)
-            fig = plt.figure()
-            ax = fig.gca()
-            ax.step(xvals, hist, label=title, where="post")
-
-            fit_line_label = fr'$\mu =$ {popt[1]:0.2e}' + "\n" + fr'$\sigma =$ {abs(popt[2]):.2e}'
-            ax.plot(xvals, yfit, label=fit_line_label, alpha=0.6, color="#DC143C")
-            
-            if self.settings_plot_titles:
-                title=r'$\tau - \tau_{seed}$ [s]'
-            else:
-                title = None
-            
-            ax.set(
-                xlabel=f"amp = {popt[0]:.2e}, mean = {popt[1]:.2e}, sigma = {abs(popt[2]):.2e}",
-                ylabel="",
-                title=title
-            )
-
-            legend = ax.legend()
-            for text in legend.get_texts():
-                text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
-
-            ax.grid()
-            outfilename = f"{self.settings_output_path}{title}"
-            plt.tight_layout()
-            plt.savefig(outfilename + ".png")
-            plt.close()
-            if self.settings_save_npz:
-                np.savez(outfilename + ".npz", xvals=xvals, y=hist, yfit=yfit)
-
-        except Exception as e:
-            logger.warning(f"{e}. Ignoring...")
-            self.simulation_error_flag = True
-
     def fit_and_plot_gaussian(self, xvals, yvals, bins=100, id_string=""):
         counts, bin_edges = np.histogram(yvals, bins=bins)  # Binning y values
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2  # Compute bin centers
