@@ -30,8 +30,11 @@ class Simulator:
     def __init__(self, config):
         # Extracting individual parameters
         self.params_tau_seed = config.params.tau_seed
+        
         self.params_timestep = config.params.timestep
         self.params_n_sim_steps = config.params.n_sim_steps
+        self.simulation_duration = self.params_timestep * self.params_n_sim_steps
+        
         self.params_n_sim = config.params.n_sim
         self.params_n_trials = config.params.n_trials
         self.params_n_decay_steps = config.params.n_decay_steps
@@ -313,7 +316,7 @@ class Simulator:
                 text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
 
             # Save plot
-            outfilename = f"{self.settings_output_path}{id_string}"
+            outfilename = f"{self.settings_output_path}{id_string}_{self.simulation_duration:.2f}s"
             plt.tight_layout()
             plt.savefig(outfilename + ".png")
             plt.close()
@@ -469,7 +472,7 @@ class Simulator:
         )
         axs.legend(loc="upper right", shadow=False)
         plt.tight_layout()
-        plt.savefig(f"{self.settings_output_path}scatter.png")
+        plt.savefig(f"{self.settings_output_path}scatter_{self.simulation_duration:.2f}s.png")
         plt.close()
 
         if self.simulation_error_flag:
