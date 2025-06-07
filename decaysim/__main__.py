@@ -195,7 +195,7 @@ class Simulator:
         if display_fit:
             ax.plot(x, yfit, label=fr'$\tau =$ {popt[1]:0.2e}', alpha=0.6, color="#DC143C")  # color Crimson
         
-        outfilename = f"{self.settings_output_path}{id_string}_ts{self.params_tau_seed:.2e}_t{popt[1]:.2e}"
+        outfilename = f"{self.settings_output_path}{id_string}_ts{self.params_tau_seed:.2e}_t{popt[1]:.2e}_{self.simulation_duration:.2f}s"
 
         if self.settings_plot_titles:
             title = r'$\tau_{seed} =$' + f"{self.params_tau_seed:0.2e}" + ' [s], ' + r'$\tau =$' + f'{popt[1]:0.2e}'
