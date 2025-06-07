@@ -318,7 +318,8 @@ class Simulator:
             # Save plot
             outfilename = f"{self.settings_output_path}{id_string}_{self.simulation_duration:.2f}s"
             plt.tight_layout()
-            plt.savefig(outfilename + ".png")
+            plt.savefig(outfilename + ".png", dpi=300)
+            plt.savefig(outfilename + ".svg")
             plt.close()
 
             if self.settings_save_npz:
@@ -472,7 +473,9 @@ class Simulator:
         )
         axs.legend(loc="upper right", shadow=False)
         plt.tight_layout()
-        plt.savefig(f"{self.settings_output_path}scatter_{self.simulation_duration:.2f}s.png")
+        outfilename = f"{self.settings_output_path}scatter_{self.simulation_duration:.2f}s"
+        plt.savefig(outfilename + ".png", dpi=300)
+        plt.savefig(outfilename + ".svg")
         plt.close()
 
         if self.simulation_error_flag:
