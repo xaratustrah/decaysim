@@ -162,7 +162,7 @@ class Simulator:
 
                 plt.xlabel("Time [s]")
                 plt.ylabel("Amplitude [a.u.]")
-                plt.grid()
+                #plt.grid()
                 outfilename = f"{self.settings_output_path}trial{trial_number:04}_decay{i:04}_ts{self.params_tau_seed:.2e}"
                 plt.tight_layout()
                 plt.savefig(outfilename + ".png")
@@ -207,8 +207,8 @@ class Simulator:
             ylabel="Amplitude [a.u.]",
             title=title,
         )
-        ax.grid()
-        legend = ax.legend()
+        # ax.grid()
+        legend = ax.legend(fontsize=14)
         for text in legend.get_texts():
             text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
         
@@ -253,7 +253,7 @@ class Simulator:
                     f"amp = {popt[0]:.2e}, mean = {popt[1]:.2e}, sigma = {abs(popt[2]):.2e}"
                 )
                 
-            legend = ax.legend()
+            legend = ax.legend(fontsize=14)
             for text in legend.get_texts():
                 text.set_verticalalignment('center')  # Options: 'top', 'bottom', 'center', 'baseline'
 
@@ -413,7 +413,7 @@ class Simulator:
             ylabel=r"$\tau_{seed} - \tau_{sim}$",
             title=r"$\tau_{seed} =$" + f"{self.params_tau_seed:0.2e}" + " [s]",
         )
-        axs.legend(loc="upper right", shadow=False)
+        axs.legend(fontsize=14)
         plt.tight_layout()
         outfilename = f"{self.settings_output_path}scatter_{self.simulation_duration:.2f}s"
         plt.savefig(outfilename + ".png", dpi=300)
