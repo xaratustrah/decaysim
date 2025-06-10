@@ -5,9 +5,9 @@ A particle decay time simulator for the investigation of the spectral add up met
 
 ## Motivation
 
+Please refer to the publication.
 
-
-## Installation
+## Installation and usage
 
 You can directly use the app:
 
@@ -23,6 +23,21 @@ pip install .
 ```
 
 Uninstalling is similarly done by calling `pip`.
+
+## Automatic reppettition of the simulation
+
+Sometimes the simulation can fail due to bad parameters. You can just delete the old results and start a new one. Also it is possible to put this repettion in a bash script like the following. This assumes that the output directory is set to `out` in the parameters file.
+
+```bash
+#!/bin/bash
+while ! python3 -m decaysim simparams_72br.toml; do
+    echo "Oops, the simnulation didn't work!"
+    rm ./out/*
+done
+echo "Simulation finished at $(date)" > run.log
+
+```
+
 
 ## Simulation settings
 
@@ -42,7 +57,7 @@ The simulation is setup using a toml file. The following are the description of 
 | stdv_bkgnd | float | Any positive number | 2.06e-8 | Error in background noise level |
 | empty_shots | bool | true or false | false | Includes empty shots in simulation |
 | empty_shots_probability | float | 0.0 - 1.0 | 0.0 | Probability of an empty shot occurring |
-| tasks | list | 'addup', 'distro', 'mle' | 'addup' | What to simulate |
+| tasks | list | 'addup', 'distro', 'mle' | 'addup' | Which method to simulate |
 | output_path | str | Valid directory path | "." | Directory for storing results |
 | plot_every_event | bool | true or false | false | Determines if every event should be plotted (high computation cost) |
 | save_npz | bool | true or false | false | Whether or not to save data as binary files |
