@@ -6,18 +6,18 @@
 tau_seed = 33 # 23.08 in [s]
 
 timestep = 0.671  # in [s]
-n_sim_steps = 205 # or 26 or 210 = timestep * n_sim_steps ~ 17.5 s
+n_sim_steps = 26 # 26 gives ~ 17.5 s, 210 gives ~ 140 s
 
 n_sim = 32  # 32 number of simulated decays
-n_trials = 10 # 10000
+n_trials = 1000
 
 n_decay_steps = 0  # either 0 or 1
 
-mean_ion = 1 # 9.44e-7
-stdv_ion = 0.082 # 7.7408e-8 # MEAN_ION * 0.082
+mean_ion = 9.44e-7
+stdv_ion = 7.7408e-8 # MEAN_ION * 0.082
 
-mean_bkgnd = 0 # 5.44e-7
-stdv_bkgnd = 0.038 # 2.06e-8 # MEAN_BKGND * 0.038
+mean_bkgnd = 5.44e-7
+stdv_bkgnd = 2.06e-8 # MEAN_BKGND * 0.038
 
 empty_shots = false
 empty_shots_probability = 0.0
@@ -25,7 +25,7 @@ empty_shots_probability = 0.0
 
 [settings]
 
-tasks = ['addup',] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
+tasks = ['addup', 'mle'] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
 output_path = "./out"
 plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
 save_npz = false
