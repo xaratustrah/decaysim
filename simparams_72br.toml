@@ -3,10 +3,10 @@
 
 [params]
 
-tau_seed = 33 # 23.08 in [s]
+tau_seed = 33 # in [s]
 
 timestep = 0.671  # in [s]
-n_sim_steps = 26 # 26 gives ~ 17.5 s, 210 gives ~ 140 s
+n_sim_steps = 26 # 26 --> ~ 17.5 s, 210 --> ~ 140 s
 
 n_sim = 32  # 32 number of simulated decays
 n_trials = 1000
