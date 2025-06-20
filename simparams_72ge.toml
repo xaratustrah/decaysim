@@ -3,12 +3,12 @@
 
 [params]
 
-tau_seed = 33 # in [s]
+tau_seed = 0.0239 # in [s]
 
-timestep = 0.671  # in [s]
-n_sim_steps = 210 # 26 --> ~ 17.5 s, 210 --> ~ 140 s
+timestep = 0.00922  # in [s]
+n_sim_steps = 542 # approx. 5 s total, time after injection
 
-n_sim = 32  # 32 number of simulated decays
+n_sim = 102  # 32 number of simulated decays in setting 1
 n_trials = 1000
 
 n_decay_steps = 0  # either 0 or 1
@@ -26,7 +26,7 @@ empty_shots_probability = 0.0
 [settings]
 
 tasks = ['addup', 'mle'] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
-output_path = "./out_br"
+output_path = "./out_ge"
 plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
 save_npz = false
 plot_titles = false # turn plot titles on or off
