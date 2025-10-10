@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: "decaysim - A particle decay time simulator for the investigation of the spectral add up method"
+version: 1.0.0
+license: "GPLv3"
+type: software
+abstract: "decaysim is a particle decay time simulator for the investigation of the spectral add up method"
+url: "https://github.com/xaratustrah/decaysim"
+doi: 10.5281/zenodo.17310310
+message: "If you use this software, please cite it as below."
+authors:
+  - given-names: Shahab
+    family-names: Sanjari
+    affiliation: GSI Helmholtz Center for Heavy Ion Research
+    orcid: "https://orcid.org/0000-0002-1825-0097"
+keywords:
+  - physics
+  - heavy ions
+  - accelerators
+  - storage rings
+  - nuclear astrophysics

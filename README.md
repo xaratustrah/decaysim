@@ -1,7 +1,5 @@
-# decaysim
-
-A particle decay time simulator for the investigation of the spectral add up method
-
+# decaysim- A particle decay time simulator for the investigation of the spectral add up method
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17310310.svg)](https://doi.org/10.5281/zenodo.17310310)
 
 ## Motivation
 
