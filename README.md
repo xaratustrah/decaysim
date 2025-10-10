@@ -5,7 +5,9 @@ A particle decay time simulator for the investigation of the spectral add up met
 
 ## Motivation
 
-Please refer to the publication.
+Due to their non-destructive nature, Schottky detectors have been preferably used in storage ring experiments in order to determine lifetimes of heavy ion beams in a variety of experiments. With the development of more sensitive detectors, it has been possible to increase the detection sensitivity down to a few or even single ions. This is crucial in experiments involving low-yield nuclei. The increased sensitivity also allows for faster detection, thanks to the reduced recording and/or averaging time needed for a sufficient signal to noise ratio (SNR). This is useful for lifetime measurements of short-lived nuclear species and their isomeric states. Targeting these extreme experimental scenarios, this work presents the spectral add-up technique, which, when combined with the isochronous ion optical mode of the heavy ion Experimental Storage Ring (ESR), can significantly increase the accuracy of lifetime measurements. The efficacy of the method is studied using dedicated simulations.
+
+For more information please refer to the publication related to this software.
 
 ## Installation and usage
 
@@ -24,24 +26,9 @@ pip install .
 
 Uninstalling is similarly done by calling `pip`.
 
-## Automatic reppettition of the simulation
+#### Simulation settings
 
-Sometimes the simulation can fail due to bad parameters. You can just delete the old results and start a new one. Also it is possible to put this repettion in a bash script like the following. This assumes that the output directory is set to `out` in the parameters file.
-
-```bash
-#!/bin/bash
-while ! python3 -m decaysim simparams_72br.toml; do
-    echo "Oops, the simnulation didn't work!"
-    rm ./out/*
-done
-echo "Simulation finished at $(date)" > run.log
-
-```
-
-
-## Simulation settings
-
-The simulation is setup using a toml file. The following are the description of the parameters:
+The simulation is setup using a [TOML](https://toml.io/en/) configuration file. The following are the description of the parameters:
 
 | Parameter | Type | Range | Example Value | Description |
 |-----------|------|-------|---------------|-------------|
@@ -63,3 +50,18 @@ The simulation is setup using a toml file. The following are the description of 
 | save_npz | bool | true or false | false | Whether or not to save data as binary files |
 | plot_titles | bool | true or false | false | Whether plots should have a title |
 
+
+
+#### Automatic rerun of the simulation
+
+Although many measures have been implemented to prevent crashes, the simulation can sometimes fail due to incorrect parameters. You can simply delete the old results and start again. It is also possible to automate this process using a bash script like the following: This assumes that the output directory is set to 'out' in the parameters file.
+
+```bash
+#!/bin/bash
+while ! python3 -m decaysim simparams_72br.toml; do
+    echo "Oops, the simnulation didn't work!"
+    rm ./out/*
+done
+echo "Simulation finished at $(date)" > run.log
+
+```
