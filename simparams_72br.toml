@@ -6,7 +6,7 @@
 tau_seed = 33 # in [s]
 
 timestep = 0.671  # in [s]
-n_sim_steps = 210 # 26 --> ~ 17.5 s, 210 --> ~ 140 s
+n_sim_steps = 26 # 26 --> ~ 17.5 s, 210 --> ~ 140 s
 
 n_sim = 32  # 32 number of simulated decays
 n_trials = 1000
@@ -25,8 +25,8 @@ empty_shots_probability = 0.0
 
 [settings]
 
-tasks = ['addup', 'mle'] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
+tasks = ['addup', 'mle', 'distro'] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
 output_path = "./out_br"
 plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
-save_npz = false
+save_npz = true
 plot_titles = false # turn plot titles on or off

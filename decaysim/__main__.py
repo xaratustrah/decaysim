@@ -63,10 +63,18 @@ class Simulator:
     def gaussian_function(x, *p):
         return p[0] * np.exp(-((x - p[1]) ** 2) / (2.0 * p[2] ** 2))
 
+    # @staticmethod
+    # def exponential_function(x, *p):
+    #     # Exponential function + offset
+    #     return p[0] * np.exp(-x / p[1]) + p[2]  # amplitude, tau and constant
+
+    # @staticmethod
+    # def expo_func(x, A, B):
+    #     return A * np.exp(-B * x)
+
     @staticmethod
-    def exponential_function(x, *p):
-        # Exponential function + offset
-        return p[0] * np.exp(-x / p[1]) + p[2]  # amplitude, tau and constant
+    def expo_func_2(x, A, B):
+        return A * np.exp(-x / B)
 
     def create_from_events_boxcar(self, x):
         b_arr = np.array([])
@@ -180,18 +188,28 @@ class Simulator:
 
     def fit_exponential(self, x, y):
         p = [
-            self.params_mean_ion / 10,
-            self.params_tau_seed / 5,
-            self.params_mean_bkgnd,
+            self.params_mean_ion,
+            self.params_tau_seed,
+            #self.params_mean_bkgnd,
         ]
-        popt, pcov = curve_fit(Simulator.exponential_function, x, y, p0=p)
+        
+        #p = [1e-6, 0.1] 
+        #popt, pcov = curve_fit(Simulator.exponential_function, x, y, p0=p)
+        popt, pcov = curve_fit(Simulator.expo_func_2, x, y, p0=p)
+
+        # Debug output
+        # print('p_in: ', p)
+        # print('p_out: ', popt)
+        # print("Tau (τ) =", popt[1], "±", np.sqrt(pcov[1, 1]) / (popt[1]**2))
+        # if popt[1] > 100:
+        #     logger.error('Too large tau!')
         return popt, pcov
 
     def plot_time_and_fit(self, x, y, popt, id_string="", display_fit=True):
         fig = plt.figure()
         ax = fig.gca()
         ax.step(x, y, label=id_string, where="post")
-        yfit = Simulator.exponential_function(x, *popt)
+        yfit = Simulator.expo_func_2(x, *popt)
         if display_fit:
             ax.plot(x, yfit, label=fr'$\tau =$ {popt[1]:0.2e}', alpha=0.6, color="#DC143C")  # color Crimson
         
@@ -319,6 +337,8 @@ class Simulator:
                     continue
                     
             logger.info("Creating tau_tru distribution from add up spectra.")
+            # Debug output
+            # print(tau_events_arr)
             popt = self.fit_and_plot_gaussian(
                 xvals, self.params_tau_seed - tau_events_arr, id_string="tau_tru_from_addup"
             )
