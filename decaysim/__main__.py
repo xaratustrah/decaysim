@@ -76,6 +76,10 @@ class Simulator:
     def expo_func_2(x, A, B):
         return A * np.exp(-x / B)
 
+    @staticmethod
+    def expo_func_3(x, A, B, C):
+        return A * np.exp(-x / B) + C
+
     def create_from_events_boxcar(self, x):
         b_arr = np.array([])
 
@@ -190,12 +194,12 @@ class Simulator:
         p = [
             self.params_mean_ion,
             self.params_tau_seed,
-            #self.params_mean_bkgnd,
+            self.params_mean_bkgnd,
         ]
         
         #p = [1e-6, 0.1] 
         #popt, pcov = curve_fit(Simulator.exponential_function, x, y, p0=p)
-        popt, pcov = curve_fit(Simulator.expo_func_2, x, y, p0=p)
+        popt, pcov = curve_fit(Simulator.expo_func_3, x, y, p0=p)
 
         # Debug output
         # print('p_in: ', p)
@@ -209,7 +213,7 @@ class Simulator:
         fig = plt.figure()
         ax = fig.gca()
         ax.step(x, y, label=id_string, where="post")
-        yfit = Simulator.expo_func_2(x, *popt)
+        yfit = Simulator.expo_func_3(x, *popt)
         if display_fit:
             ax.plot(x, yfit, label=fr'$\tau =$ {popt[1]:0.2e}', alpha=0.6, color="#DC143C")  # color Crimson
         
