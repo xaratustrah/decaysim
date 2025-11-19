@@ -188,7 +188,9 @@ class Simulator:
 
     def get_mle(self, x):
         samples = np.random.exponential(self.params_tau_seed, size=len(x))
-        return np.mean(samples)
+        #return np.mean(samples)
+        # new definition
+        return np.mean(samples[samples < self.params_timestep * self.params_n_sim_steps])
 
     def fit_exponential(self, x, y):
         p = [
@@ -422,17 +424,17 @@ class Simulator:
         if 'addup' in self.settings_tasks:
             axs.step(
                 np.arange(len(tau_events_arr)),
-                self.params_tau_seed - tau_events_arr,
+                np.abs(self.params_tau_seed - tau_events_arr),
                 where="post",
                 label="tau_from_trials",
             )
         if 'distro' in self.settings_tasks:
-            axs.step(np.arange(len(tau_distro_arr)), self.params_tau_seed -
-                    tau_distro_arr, where='post', label='tau_from_distro')
+            axs.step(np.arange(len(tau_distro_arr)), np.abs(self.params_tau_seed -
+                    tau_distro_arr), where='post', label='tau_from_distro')
         if 'mle' in self.settings_tasks:
             axs.step(
                 np.arange(len(tau_mle_arr)),
-                self.params_tau_seed - tau_mle_arr,
+                np.abs(self.params_tau_seed - tau_mle_arr),
                 where="post",
                 label="tau_from_mle",
             )
