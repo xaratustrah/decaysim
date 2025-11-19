@@ -356,18 +356,14 @@ class Simulator:
             mean_of_sigmas_from_addup = popt[1]
             logger.info(f"Mean of sigmas from addup is = {mean_of_sigmas_from_addup}")
 
-            # old definition
-            # rho_from_addup = mean_of_sigmas_from_addup / sigma_tru_from_addup
             # new definition
             rho_from_addup = sigma_tru_from_addup / mean_of_sigmas_from_addup
             logger.info(f"rho from addup = {rho_from_addup}")
 
-            logger.info("Creating rho distribion from add up.")
+            # new definition
+            logger.info("Creating the P distribion from add up.")
             self.fit_and_plot_gaussian(
-                # old definition
-                #xvals, sigma_events_arr / sigma_tru_from_addup, id_string="rho_from_addup"
-                # new definition
-                xvals, (self.params_tau_seed - tau_events_arr) / sigma_events_arr , id_string="rho_from_addup"
+                xvals, (self.params_tau_seed - tau_events_arr) / sigma_events_arr , id_string="P_from_addup"
             )
 
         if 'distro' in self.settings_tasks:
@@ -396,11 +392,13 @@ class Simulator:
             mean_of_sigmas_from_distro = popt[1]
             logger.info(f'Mean of sigmas from distro = {mean_of_sigmas_from_distro}')
 
-            rho_from_distro = mean_of_sigmas_from_distro / sigma_tru_from_distro
+            # new definition
+            rho_from_distro =  sigma_tru_from_distro / mean_of_sigmas_from_distro
             logger.info(f'rho from distro = {rho_from_distro}')
 
-            logger.info('Creating rho distribion from distro.')
-            self.fit_and_plot_gaussian(xvals, sigma_distro_arr / sigma_tru_from_distro, id_string = 'rho_from_distro')
+            # new definition
+            logger.info('Creating the P distribion from distro.')
+            self.fit_and_plot_gaussian(xvals, (self.params_tau_seed - tau_distro_arr) / sigma_distro_arr, id_string = 'P_from_distro')
 
         if 'mle' in self.settings_tasks:
             logger.info('Performing simulation task: mle')
