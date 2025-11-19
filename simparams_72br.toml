@@ -27,6 +27,6 @@ empty_shots_probability = 0.0
 
 tasks = ['addup', 'mle'] # Tasks: what to simulate, like 'addup', 'distro', 'mle'
 output_path = "./out_br"
-plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
+plot_every_event = true # expect longer simulation times if set to true. applies only to addup method
 save_npz = true
 plot_titles = false # turn plot titles on or off

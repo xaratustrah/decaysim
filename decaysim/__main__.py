@@ -356,12 +356,18 @@ class Simulator:
             mean_of_sigmas_from_addup = popt[1]
             logger.info(f"Mean of sigmas from addup is = {mean_of_sigmas_from_addup}")
 
-            rho_from_addup = mean_of_sigmas_from_addup / sigma_tru_from_addup
+            # old definition
+            # rho_from_addup = mean_of_sigmas_from_addup / sigma_tru_from_addup
+            # new definition
+            rho_from_addup = sigma_tru_from_addup / mean_of_sigmas_from_addup
             logger.info(f"rho from addup = {rho_from_addup}")
 
             logger.info("Creating rho distribion from add up.")
             self.fit_and_plot_gaussian(
-                xvals, sigma_events_arr / sigma_tru_from_addup, id_string="rho_from_addup"
+                # old definition
+                #xvals, sigma_events_arr / sigma_tru_from_addup, id_string="rho_from_addup"
+                # new definition
+                xvals, (self.params_tau_seed - tau_events_arr) / sigma_events_arr , id_string="rho_from_addup"
             )
 
         if 'distro' in self.settings_tasks:
