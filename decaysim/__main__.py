@@ -188,9 +188,18 @@ class Simulator:
 
     def get_mle(self, x):
         samples = np.random.exponential(self.params_tau_seed, size=len(x))
-        #return np.mean(samples)
-        # new definition
-        return np.mean(samples[samples < self.params_timestep * self.params_n_sim_steps])
+        
+        # old definition: takes all points
+        # return np.mean(samples)
+        
+        # new definition with cut-off
+        #return np.mean(samples[samples < self.params_timestep * self.params_n_sim_steps])
+        
+        # new definition with right-sensoring
+        obs_window = self.params_timestep * self.params_n_sim_steps 
+        cutoff_samples =  samples[samples < obs_window]
+        mle_est = np.mean(cutoff_samples) + ( self.params_n_sim - len(cutoff_samples) ) * obs_window /  len(cutoff_samples)
+        return mle_est
 
     def fit_exponential(self, x, y):
         p = [
@@ -434,7 +443,7 @@ class Simulator:
         if 'mle' in self.settings_tasks:
             axs.step(
                 np.arange(len(tau_mle_arr)),
-                np.abs(self.params_tau_seed - tau_mle_arr),
+                self.params_tau_seed - tau_mle_arr,
                 where="post",
                 label="tau_from_mle",
             )
