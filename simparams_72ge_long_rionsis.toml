@@ -1,0 +1,53 @@
+# decaysim -- 72Ge Long (corrected) from ONE source: the RionSIS export (section 13 of staircase_analysis_final_longset_v2.ipynb)
+# With rionsis_file set, these come from the file and the values here are IGNORED:
+#   mean_ion_number, mean_ion, mean_bkgnd, stdv_ion, stdv_bkgnd, timestep, n_sim, n_sim_steps,
+#   tau_seed, max_ions, exp_decay_file, exp_injections_file  (the log lists every value taken)
+
+[params]
+max_ions = 10   # from RionSIS
+rionsis_file = "/home/carlo/Desktop/PhD/coding/results/Ge/files/Corrected data/Long_Setting/rionsis_export_Ge_long.npz"
+
+# placeholders (required by the parser, overwritten from rionsis_file)
+tau_seed = 4.912082e-02
+timestep = 9.236480e-03
+n_sim_steps = 108
+n_sim = 2444
+mean_ion_number = 1.001587e+00
+mean_ion = 8.772468e-01
+stdv_ion = 3.978733e-01
+mean_bkgnd = -2.753166e-03
+stdv_bkgnd = 7.178902e-01
+
+n_trials = 1000
+n_decay_steps = 1
+ion_distribution = "poisson"
+noise_model = "quadrature"
+
+stdv_ion_corr = 0.0
+corr_bins = 0.0
+
+empty_shots = false
+empty_shots_probability = 0.0
+limit = 400
+seed = 1
+
+# ---- fit (same bins as RionSIS section 12: nothing to drop) ----
+fit_drop = []
+fit_t_start = 0.0
+fit_weights = "model"                # "exp" = σ of the RionSIS fit (noise model, RionSIS section 12): same weights for real and simulated fits | "none" | "model"
+compare_t_starts = [0.0, 0.0277]   # first bin and ~0.5 τ_lab (as the half-life "cut" fit)
+rms_windows = [[0.0, 0.1], [0.1, 0.3], [0.3, 1e9]]   # early / middle / tail [s] (≈ 0-2 / 2-6 / > 6 τ_lab)
+
+# ---- bootstrap ----
+bootstrap_n = 1000
+bootstrap_block = 5
+bootstrap_trials = 10
+
+[settings]
+tasks = ['addup', 'mle']
+output_path = "./out_ge"
+output_tag = "ge_long_"
+plot_every_event = false
+save_npz = false
+plot_titles = false
+n_trial_plots = 3

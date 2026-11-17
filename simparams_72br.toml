@@ -22,6 +22,7 @@ stdv_bkgnd = 2.06e-8 # MEAN_BKGND * 0.038
 empty_shots = false
 empty_shots_probability = 0.0
 
+seed = 42  # fixes the RNG for reproducible runs; omit/remove for nondeterministic runs
 
 [settings]
 
