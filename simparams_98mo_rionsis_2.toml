@@ -1,0 +1,51 @@
+# decaysim -- 98Mo from ONE source: the RionSIS export (section 11 of staircase_analysis_final_v2.ipynb)
+# With rionsis_file set, these come from the file and the values here are IGNORED:
+#   mean_ion_number, mean_ion, mean_bkgnd, stdv_ion, stdv_bkgnd, timestep, n_sim, n_sim_steps,
+#   tau_seed, max_ions, exp_decay_file, exp_injections_file  (the log lists every value taken)
+
+[params]
+rionsis_file = "/home/carlo/Desktop/PhD/coding/results/Mo/files/rionsis_export_Mo.npz"
+
+# placeholders (required by the parser, overwritten from rionsis_file)
+tau_seed = 0.0
+timestep = 0.0
+n_sim_steps = 0
+n_sim = 0
+mean_ion_number = 0
+mean_ion = 0.0
+stdv_ion = 0.0
+mean_bkgnd = 0.0
+stdv_bkgnd = 0.0
+
+n_trials = 300
+n_decay_steps = 0
+ion_distribution = "poisson"
+noise_model = "quadrature"
+
+stdv_ion_corr = 0.0
+corr_bins = 0.0
+
+empty_shots = false
+empty_shots_probability = 0.0
+limit = 1600
+seed = 1
+
+# ---- fit (RionSIS has already cut the first 40 ms: nothing to drop) ----
+fit_drop = []
+fit_t_start = 0.0
+fit_weights = "exp"                # "exp" = σ of the RionSIS fit (noise model, section 9): same weights for real and simulated fits | "none" | "model"
+compare_t_starts = [0.0, 0.127]    # 0.127 s here = 167 ms after injection (first bin is at 39.7 ms)
+
+# ---- bootstrap ----
+bootstrap_n = 200
+bootstrap_block = 5
+bootstrap_trials = 10
+
+[settings]
+tasks = ['addup', 'mle']
+output_path = "./out_mo"
+output_tag = "rionsis_"
+plot_every_event = false
+save_npz = false
+plot_titles = false
+n_trial_plots = 3

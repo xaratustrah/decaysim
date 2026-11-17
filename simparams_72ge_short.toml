@@ -1,0 +1,27 @@
+# RionDS input, ge_short. Written by the RionSIS notebook (102 injections): rerun it instead of editing.
+[params]
+# exponential fit (with σ) of the real summed curve
+tau_seed        = 5.025863e-02   # [s] τ_lab (fit from fit_t_start)
+fit_t_start     = 0.000000e+00   # [s] first time of the fit (first bin = 0)
+sigma_fit_real  = 1.961433e-03   # [s] fit error of τ_lab of the real data (for ρ and σ_corr)
+exp_data_file   = "/home/carlo/Desktop/PhD/coding/git/RionDS/exp_72ge_short.npz"   # real summed curve, overlaid in the plots
+# single injections   (A1 = 0.8580 ± 0.2187, σ0 = 0.8340 A1 (plateau), k = 0.5594 A1)
+mean_ion_number = 5.093934       # μ (± 1.3199)
+mean_bkgnd      = -7.719657e-03   # I0
+mean_ion        = 8.502501e-01   # I1 = I0 + A1
+stdv_bkgnd      = 7.155078e-01   # σ(I0) = σ0·A1
+stdv_ion        = 4.799440e-01   # σ(I1) = k·A1
+ion_number_r    = 0   # width of the ion-number distribution (negative binomial); 0 = Poisson
+# data
+timestep        = 9.236480e-03   # [s] time bin
+n_sim_steps     = 108            # time bins
+n_sim           = 102           # injections summed (after cuts)
+# simulation
+n_decay_steps   = 1              # intermediate frame
+empty_shots_probability = 0.0    # extra empty injections (0 = none)
+n_trials        = 1000
+seed            = 1
+
+[settings]
+output_path = "./out_72ge_short"
+output_tag  = "72ge_short_"

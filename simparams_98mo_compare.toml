@@ -1,0 +1,59 @@
+# decaysim -- 98Mo, uncorr_10.45ms, band sum: same data, bins and fit as Half_Life_general_zr6.ipynb
+# (the original simparams_98mo.toml is left unchanged)
+
+[params]
+
+tau_seed = 0.263854        # [s] = real fit, no σ, from 31.4 ms
+timestep = 0.010454        # [s] = DT of the notebook (was 0.01045)
+n_sim_steps = 155          # = all 155 time bins of the real data
+n_sim = 7269               # = N_INJ of the real sum
+n_trials = 1000
+
+n_decay_steps = 0          # 0 or 1 (1 = bin-averaged decay bin)
+
+ion_distribution = "poisson"
+mean_ion_number = 20
+max_ions = 47
+ion_distribution_file = "/home/carlo/Desktop/PhD/coding/git/RionDS/initial_ion_counts_long.npy"
+
+# saved by the half-life notebook (cell "save for RionDS"): y, sigma, bins, dt, n_inj
+exp_decay_file = "/home/carlo/Desktop/PhD/coding/results/Mo/files/exp_decay.npz"
+
+noise_model = "quadrature"
+mean_ion   = 4.41e-07      # I1  (band-sum units, per injection)
+stdv_ion   = 4.4e-08       # sigma1 = k * A1   (k = 0.38)
+mean_bkgnd = 3.25e-07      # I0
+stdv_bkgnd = 7.8501e-08    # sigma0 (0.678 * A1)
+
+# optional time-correlated ion noise (test only; 0 = off)
+stdv_ion_corr = 0.0
+corr_bins = 0.0
+
+# ---- bootstrap (0 = off) ----
+bootstrap_n = 200                  # resamples per data set
+bootstrap_block = 5                # residual bootstrap: block length in bins (1 = independent bins)
+bootstrap_trials = 10              # how many simulated trials are also bootstrapped (slow part)
+# real single-injection curves for the injection bootstrap (optional; Y, bins, dt)
+#exp_injections_file = "/home/carlo/Desktop/PhD/coding/results/Mo/files/exp_injections.npz"
+
+empty_shots = false
+empty_shots_probability = 0.0
+
+limit = 1600
+seed = 1
+
+# ---- fit: identical to the notebook ----
+fit_drop = [0, 1, 2]               # = SKIP_BINS
+fit_t_start = 0.0                  # main fit from the first used bin (31.4 ms); 0.167 = notebook's 2nd start
+fit_weights = "model"               # "none" = no σ | "exp" = with σ (same σ as the real fit) | "model"
+compare_t_starts = [0.0, 0.167]    # comparison table for both starts
+
+[settings]
+
+tasks = ['addup', 'mle']
+output_path = "./out_mo"
+output_tag = "cmp_"
+plot_every_event = false
+save_npz = false
+plot_titles = false
+n_trial_plots = 3                  # plot only the first 3 trials (faster)

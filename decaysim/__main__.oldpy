@@ -1,0 +1,844 @@
+#!/usr/bin/env python
+"""
+A particle decay time simulator for the investigation of the spectral add up method
+
+xaratustrah@github 2022-2025
+"""
+
+import argparse
+from loguru import logger
+import sys, os
+import toml
+import matplotlib.pyplot as plt
+from matplotlib.transforms import ScaledTranslation
+import warnings
+from scipy.optimize import curve_fit, OptimizeWarning
+import numpy as np
+from pydantic import BaseModel, Field
+from tqdm import tqdm
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+
+# ======================================================================================================
+# Common figure format for the paper figures (plot_multi_ion_decay and plot_time_and_fit).
+# FIG_WIDTH_IN must be the width the figure has in the LaTeX document: in Overleaf print \the\linewidth
+# and divide the points by 72.27 (e.g. 345.0pt -> 4.77 in). The file is then included WITHOUT rescaling,
+# so the font sizes below appear in the paper exactly as set.
+# ======================================================================================================
+FIG_WIDTH_IN = 6.0    # inches
+FIG_HEIGHT_IN = 3.6   # inches
+FONT_AXIS, FONT_TICKS, FONT_LEGEND, FONT_ANNOT = 11, 10, 10, 8   # pt
+LINEWIDTH = 1.5
+X_LEFT_S = -0.02      # s, left x-limit shared by both figures
+DPI = 300
+plt.rcParams.update({
+    "font.size": FONT_AXIS, "axes.labelsize": FONT_AXIS, "axes.titlesize": FONT_AXIS,
+    "xtick.labelsize": FONT_TICKS, "ytick.labelsize": FONT_TICKS, "legend.fontsize": FONT_LEGEND,
+    "lines.linewidth": LINEWIDTH, "savefig.dpi": DPI, "pdf.fonttype": 42,
+})
+
+# handle scipy and numpy warnings as errors
+warnings.simplefilter("error", OptimizeWarning)
+np.seterr(all="ignore")  # raise
+
+
+class Simulator:
+    def __init__(self, config):
+        # Extracting individual parameters
+        self.params_tau_seed = config.params.tau_seed
+
+        self.params_timestep = config.params.timestep
+        self.params_n_sim_steps = config.params.n_sim_steps
+        self.simulation_duration = self.params_timestep * self.params_n_sim_steps
+
+        self.params_n_sim = config.params.n_sim
+        self.params_n_trials = config.params.n_trials
+        self.params_n_decay_steps = config.params.n_decay_steps
+        self.params_mean_ion_number = config.params.mean_ion_number
+        self.params_max_ions = config.params.max_ions
+        self.params_mean_ion = config.params.mean_ion
+        self.params_noise_model = config.params.noise_model
+        self.params_stdv_ion = config.params.stdv_ion
+        self.params_mean_bkgnd = config.params.mean_bkgnd
+        self.params_stdv_bkgnd = config.params.stdv_bkgnd
+        self.params_empty_shots = config.params.empty_shots
+        self.params_empty_shots_probability = config.params.empty_shots_probability
+        self.params_limit = config.params.limit
+
+        # Bins excluded from the exponential fit. Must be the same bins as in the fit of the real data
+        # (the real fit drops the first and the third bin), otherwise sigma_est is not comparable.
+        self.fit_drop = tuple(config.params.fit_drop)
+
+        # Explicit, seedable RNG (no hidden global np.random state). A
+        # fixed integer seed makes every run bit-reproducible; None falls
+        # back to nondeterministic OS entropy.
+        self.params_seed = config.params.seed
+        self.rng = np.random.default_rng(self.params_seed)
+
+        # handle trailing slash and file path properly
+        self.settings_output_path = os.path.join(config.settings.output_path, "")
+        self.settings_output_tag = config.settings.output_tag   # prefix of every output file name (e.g. "long_")
+        self.settings_figure_formats = list(config.settings.figure_formats)
+        self.settings_plot_every_event = config.settings.plot_every_event
+        self.settings_save_npz = config.settings.save_npz
+        self.settings_tasks = config.settings.tasks
+        self.settings_plot_titles = config.settings.plot_titles
+
+        self.params_ion_distribution = config.params.ion_distribution
+        self.params_ion_distribution_file = config.params.ion_distribution_file
+        self.empirical_ion_counts = None
+        self._ion_idx = 0
+        self._diagnostic_level_by_n = {}
+        self.exp_decay_file = config.params.exp_decay_file
+
+        if self.exp_decay_file:
+            self.exp_decay_values = np.load(self.exp_decay_file)
+        else:
+            self.exp_decay_values = None
+
+        if self.params_ion_distribution == "empirical":
+            if not self.params_ion_distribution_file:
+                logger.error("ion_distribution='empirical' requires ion_distribution_file to be set.")
+                exit()
+            if not os.path.isfile(self.params_ion_distribution_file):
+                logger.error(f"ion_distribution_file not found: {self.params_ion_distribution_file}")
+                exit()
+            self.empirical_ion_counts = np.load(self.params_ion_distribution_file)
+            logger.info(
+                f"Loaded empirical ion-count distribution: {len(self.empirical_ion_counts)} samples, "
+                f"mean={self.empirical_ion_counts.mean():.3f}, max={int(self.empirical_ion_counts.max())}"
+            )
+        elif self.params_ion_distribution != "poisson":
+            logger.error(f"Unknown ion_distribution: {self.params_ion_distribution!r} (use 'poisson' or 'empirical')")
+            exit()
+
+        if not os.path.isdir(self.settings_output_path):
+            logger.error("Output file path does not exist.")
+            exit()
+
+        logger.info("Simulation start. Enter command or ctrl-C to abort.")
+        logger.info(f"Output file path: {self.settings_output_path}")
+        logger.info(f"RNG seed: {self.params_seed if self.params_seed is not None else 'None (nondeterministic)'}")
+
+    # ------------------------------------------------------------------
+    # static helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def gaussian_function(x, *p):
+        return p[0] * np.exp(-((x - p[1]) ** 2) / (2.0 * p[2] ** 2))
+
+    @staticmethod
+    def expo_func_2(x, A, B):
+        return A * np.exp(-x / B)
+
+    @staticmethod
+    def expo_func_3(x, A, B, C):
+        return A * np.exp(-x / B) + C
+
+    # ------------------------------------------------------------------
+    # shared helpers: both paper figures are built and saved through these, so they cannot drift apart
+    # ------------------------------------------------------------------
+    def _outpath(self, stem):
+        """Full path of an output file; the optional output_tag keeps files of different runs apart
+        (important for \\includesvg, which caches converted files by base name only)."""
+        return f"{self.settings_output_path}{self.settings_output_tag}{stem}"
+
+    def _new_figure(self):
+        return plt.subplots(figsize=(FIG_WIDTH_IN, FIG_HEIGHT_IN), constrained_layout=True)
+
+    def _style_axes(self, ax, limit, legend_loc="upper right"):
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Amplitude [a.u.]")
+        ax.set_xlim(X_LEFT_S, limit / 1000.0)
+        ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+        ax.yaxis.get_offset_text().set_fontsize(FONT_TICKS)
+        ax.grid(True)
+        legend = ax.legend(fontsize=FONT_LEGEND, loc=legend_loc)
+        for text in legend.get_texts():
+            text.set_verticalalignment("center")
+
+    def _save_figure(self, fig, outbase):
+        for ext in self.settings_figure_formats:
+            fig.savefig(f"{outbase}.{ext}", dpi=DPI)   # no bbox_inches="tight": exact figure size is kept
+        plt.close(fig)
+
+    def fit_mask(self, n):
+        """True for the bins that enter the exponential fit (the bins in self.fit_drop are excluded)."""
+        keep = np.ones(n, dtype=bool)
+        keep[list(self.fit_drop)] = False
+        return keep
+
+    # ------------------------------------------------------------------
+    # simulation of the decays
+    # ------------------------------------------------------------------
+    def create_from_events_boxcar(self, x):
+        b_arr = np.array([])
+
+        for i in range(self.params_n_sim):
+            # create a single random number based on an exponential distribution
+            num = self.rng.exponential(self.params_tau_seed)
+
+            idx = np.where(x < num)[0][-1]
+            b = np.zeros(len(x))
+            ii = np.r_[0:idx]
+            b[ii] = self.params_mean_ion
+
+            # decay happens in the same time bin
+            if self.params_n_decay_steps == 0:
+                jj = np.r_[idx : len(x)]
+                b[jj] = self.params_mean_bkgnd
+
+            # or latest in the next time bin
+            elif self.params_n_decay_steps == 1:
+                if not idx + 1 > len(x):
+                    jj = np.r_[idx : idx + 1]
+                    b[jj] = self.params_mean_ion / 2
+                jj = np.r_[idx + 1 : len(x)]
+                b[jj] = self.params_mean_bkgnd
+
+            b_arr = np.append(b_arr, b)
+
+        b_arr = np.reshape(b_arr, (self.params_n_sim, len(b)))
+        b_arr_avg = np.average(b_arr, axis=0)
+        return b_arr_avg
+
+    def create_from_distribution(self, x):
+        data = self.rng.exponential(self.params_tau_seed, size=len(x))
+        hist = np.histogram(
+            data,
+            bins=int(
+                self.params_timestep * self.params_n_sim_steps / self.params_timestep
+            ),
+            range=(0, self.params_timestep * self.params_n_sim_steps),
+        )[0]
+
+        return hist / np.max(hist)
+
+    def draw_ion_count(self, rng: np.random.Generator) -> int:
+        """Draw a single injection's initial ion count: Poisson, or next-in-order from the empirical array.
+        max_ions is optional; if set, draws above it are CLIPPED to it (lowering the realized mean)."""
+        if self.params_ion_distribution == "empirical":
+            n_ions = int(self.empirical_ion_counts[self._ion_idx % len(self.empirical_ion_counts)])
+            self._ion_idx += 1
+        else:
+            n_ions = int(rng.poisson(self.params_mean_ion_number))
+        if self.params_max_ions is not None:
+            n_ions = min(n_ions, self.params_max_ions)
+        return n_ions
+
+    # ------------------------------------------------------------------
+    # figure 1: one simulated injection with the model staircase
+    # ------------------------------------------------------------------
+    def plot_multi_ion_decay(self, x, n_alive, I_t, b, sim_number, limit):
+        x = np.asarray(x, dtype=float)
+        b = np.asarray(b, dtype=float)
+        n_alive = np.asarray(n_alive)
+        limit_s = limit / 1000.0
+        timestep = x[1] - x[0]
+        changes = np.where(np.diff(n_alive) != 0)[0]
+        boundaries = np.concatenate(([0], changes + 1, [len(n_alive)]))
+        decay_x = x[changes]                      # before padding, so the indices stay valid
+
+        # pad to the plotted range with the model noise of the last level. A LOCAL generator is used on purpose:
+        # drawing from self.rng here would shift the seeded simulation stream (and change the results).
+        pad_rng = np.random.default_rng(sim_number)
+        n_last = n_alive[-1]
+        pad_level = self.params_mean_bkgnd + n_last * (self.params_mean_ion - self.params_mean_bkgnd)
+        pad_sigma = np.sqrt(self.params_stdv_bkgnd**2 + (n_last * self.params_stdv_ion) ** 2)
+        while x[-1] < limit_s:
+            x = np.append(x, x[-1] + timestep)
+            b = np.append(b, pad_rng.normal(pad_level, pad_sigma))
+            n_alive = np.append(n_alive, n_alive[-1])
+
+        fig, ax = self._new_figure()
+        ax.plot(x, b, color="C0", label="Simulated signal")
+        level_label_used = False
+        for i in range(len(boundaries) - 1):
+            s, e = boundaries[i], boundaries[i + 1]
+            if x[s] >= limit_s:
+                continue
+            n = n_alive[s]
+            # model level I0 + n*(I1-I0): monotonic by construction (plateau MEANS of the noisy bins are not)
+            level = self.params_mean_bkgnd + n * (self.params_mean_ion - self.params_mean_bkgnd)
+            x_from = x[s] - timestep if s > 0 else x[s]
+            x_to = x[-1] if i == len(boundaries) - 2 else max(x[e - 1], x_from + timestep)   # at least one bin wide
+            ax.hlines(level, x_from, x_to, alpha=0.6, colors="red", linestyle="--",
+                      label="Staircase level" if not level_label_used else None)
+            level_label_used = True
+            # label sits just above its own level line: the levels are distinct, so labels do not collide
+            ax.text((x[s] + min(x_to, limit_s)) / 2, level, f"{n} ion{'s' if n != 1 else ''}",
+                    transform=ax.transData + ScaledTranslation(0, 3 / 72, fig.dpi_scale_trans),
+                    ha="center", va="bottom", fontsize=FONT_ANNOT, bbox=dict(facecolor="white", alpha=0.8, pad=1.0))
+        for t in decay_x:
+            ax.axvline(t, color="grey", linestyle="--", linewidth=1)
+
+        self._style_axes(ax, limit, legend_loc="upper right")
+        self._save_figure(fig, self._outpath(f"multi_decay_trial_{sim_number:04}"))
+
+    def create_from_events_with_fluctuations(
+        self, x, trial_number, add_empty_shots=False
+    ):
+        """Simulate one add-up trial (n_sim injections, summed).
+
+        Returns (summed signal, sigma used for the fit, all decay times of this trial). The decay times are the
+        real latent events the summed curve is built from; they are what the MLE benchmark must use.
+
+        noise_model options:
+          "sqrt"       sigma_ion = stdv_ion * sqrt(n)
+          "linear"     sigma_ion = stdv_bkgnd + n * stdv_ion
+          "quadrature" sigma_ion = sqrt(stdv_bkgnd**2 + (n * stdv_ion)**2)
+                       (RionSiS noise model, originally established in
+                       Moritz Porstendoerfer's Bachelor thesis)
+        """
+        if self.params_ion_distribution == "empirical":
+            self._ion_idx = 0  # replay the real sequence in order, fresh for every trial
+
+        b_arr = np.array([])
+        all_decay_times = []
+        # mask == 0 with probability empty_shots_probability  ->  those injections are forced empty
+        empty_shot_mask = self.rng.choice(
+            [0, 1],
+            size=self.params_n_sim,
+            p=[
+                self.params_empty_shots_probability,
+                1 - self.params_empty_shots_probability,
+            ],
+        )
+
+        t_max = 10 * self.params_tau_seed
+        mask = x <= t_max
+
+        for i in range(self.params_n_sim):
+
+            # -----------------------------
+            # 1. Draw number of ions
+            # -----------------------------
+            n_ions = self.draw_ion_count(self.rng)
+
+            # If empty shot -> force zero ions
+            if add_empty_shots and not empty_shot_mask[i]:
+                n_ions = 0
+
+            # -----------------------------
+            # 2. If no ions -> pure background
+            # -----------------------------
+            if n_ions == 0:
+                b = self.rng.normal(self.params_mean_bkgnd,
+                                    self.params_stdv_bkgnd,
+                                    len(x))
+                b_arr = np.append(b_arr, b)
+
+                if trial_number == 1 and i < 50:
+                    n_alive_empty = np.zeros(len(x), dtype=int)
+                    I_t_empty = np.full(len(x), self.params_mean_bkgnd)
+                    self.plot_multi_ion_decay(x[mask], n_alive_empty[mask], I_t_empty[mask], b[mask], i, self.params_limit)
+                continue
+
+            decay_times = self.rng.exponential(self.params_tau_seed, size=n_ions)
+            decay_times.sort()
+            all_decay_times.append(decay_times)
+
+            n_alive = n_ions - np.searchsorted(decay_times, x, side="right")
+
+            # -----------------------------
+            # 3. Convert n(t) to intensity using calibrated ladder: I(n) = I0 + n*(I1 - I0)
+            # -----------------------------
+            I0 = self.params_mean_bkgnd
+            I1 = self.params_mean_ion
+            I_t = I0 + n_alive * (I1 - I0)
+
+            # ---------------------------------------------------------
+            # Intermediate frame logic (multi-ion version): the bin in which an ion decays only holds
+            # the fraction of the bin during which it was alive (bin-averaged signal)
+            # ---------------------------------------------------------
+            if self.params_n_decay_steps == 1:
+                for t_decay in decay_times:
+                    frame = int(t_decay / self.params_timestep)
+                    if frame < len(x):
+                        remainder = t_decay % self.params_timestep
+                        fraction_alive = 1 - remainder / self.params_timestep
+                        if n_alive[frame] > 0:
+                            I_t[frame] -= fraction_alive * (self.params_mean_ion - self.params_mean_bkgnd)
+
+            # -----------------------------
+            # 4. Noise model (selectable)
+            # -----------------------------
+            if self.params_noise_model == "sqrt":
+                sigma_ion = self.params_stdv_ion * np.sqrt(n_alive)
+                sigma_bkg = self.params_stdv_bkgnd
+
+            elif self.params_noise_model == "linear":
+                # sigma(n) = std_dev_bkg + n * std_dev_ion
+                sigma_ion = self.params_stdv_bkgnd + n_alive * self.params_stdv_ion
+                sigma_bkg = self.params_stdv_bkgnd
+
+            elif self.params_noise_model == "quadrature":
+                # sigma(n) = sqrt(std_dev_bkg^2 + (n * std_dev_ion)^2), i.e. the RionSiS noise model
+                sigma_ion = np.sqrt(self.params_stdv_bkgnd**2 + (n_alive * self.params_stdv_ion) ** 2)
+                sigma_bkg = self.params_stdv_bkgnd
+
+            else:
+                # fallback: old model
+                sigma_ion = self.params_stdv_ion * np.sqrt(n_alive)
+                sigma_bkg = self.params_stdv_bkgnd
+
+            # Zero-mean noise for ions and background, selected per bin by ion count
+            noise_ion = self.rng.normal(0, sigma_ion)
+            noise_bkg = self.rng.normal(0, sigma_bkg, len(x))
+            noise = np.where(n_alive > 0, noise_ion, noise_bkg)
+
+            sigma_for_fit = np.where(n_alive > 0, sigma_ion, sigma_bkg)
+
+            # Add noise to ladder (no clipping and no forced ordering: both bias the add-up statistics)
+            b = I_t + noise
+
+            changes = np.where(np.diff(n_alive) != 0)[0]
+            boundaries = np.concatenate(([0], changes + 1, [len(n_alive)]))
+            for j in range(len(boundaries) - 1):
+                s, e = boundaries[j], boundaries[j + 1]
+                n = int(n_alive[s])
+                plateau_mean = b[s:e].mean()
+                self._diagnostic_level_by_n.setdefault(n, []).append(plateau_mean)
+            b_arr = np.append(b_arr, b)
+
+            if self.settings_plot_every_event:
+                x_ev = np.arange(len(b)) * self.params_timestep
+                fig_ev, ax_ev = self._new_figure()
+                ax_ev.step(x_ev, b, where="post")
+                ax_ev.set_xlabel("Time [s]")
+                ax_ev.set_ylabel("Amplitude [a.u.]")
+                ax_ev.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+                ax_ev.yaxis.get_offset_text().set_fontsize(FONT_TICKS)
+                if self.settings_plot_titles:
+                    ax_ev.set_title(r"$\tau_{seed} =$" + str(self.params_tau_seed) + " [s]")
+                outbase = self._outpath(f"trial{trial_number:04}_decay{i:04}_ts{self.params_tau_seed:.2e}")
+                self._save_figure(fig_ev, outbase)
+                if self.settings_save_npz:
+                    np.savez(outbase + ".npz", x=x_ev, y=b)
+
+            if trial_number == 1 and i < 50:
+                self.plot_multi_ion_decay(x[mask], n_alive[mask], I_t[mask], b[mask], i, self.params_limit)
+
+        b_arr = np.reshape(b_arr, (self.params_n_sim, len(x)))
+        b_arr_sum = np.sum(b_arr, axis=0)
+        trial_decay_times = (
+            np.concatenate(all_decay_times) if all_decay_times else np.array([])
+        )
+        return b_arr_sum, sigma_for_fit, trial_decay_times
+
+    def get_mle(self, decay_times):
+        """MLE of the exponential mean under Type-I right censoring at obs_window, computed from the ACTUAL
+        decay times already simulated for this trial's add-up curve (not an independent redraw) -- this is what
+        makes it a genuine same-data benchmark against sigma_tru from the add-up method."""
+        if len(decay_times) == 0:
+            logger.warning("get_mle: no decays this trial (all injections empty) -- returning nan.")
+            return np.nan
+        obs_window = self.params_timestep * self.params_n_sim_steps
+        cutoff_samples = decay_times[decay_times < obs_window]
+        n_censored = len(decay_times) - len(cutoff_samples)
+        if len(cutoff_samples) == 0:
+            logger.warning("get_mle: zero observed (uncensored) decays this trial -- returning nan.")
+            return np.nan
+        mle_est = np.mean(cutoff_samples) + n_censored * obs_window / len(cutoff_samples)
+        return mle_est
+
+    def fit_exponential(self, x, y, sigma=None):
+        """Unweighted fit of A*exp(-t/tau)+C. The bins in self.fit_drop are excluded, as in the real-data fit.
+        (sigma is accepted for backwards compatibility but not used: the fit is unweighted.)"""
+        keep = self.fit_mask(len(x))
+        x, y = x[keep], y[keep]
+        p = [
+            y[0],
+            self.params_tau_seed,
+            self.params_mean_bkgnd,
+        ]
+        popt, pcov = curve_fit(Simulator.expo_func_3, x, y, p0=p)
+        logger.debug(f"params: A={popt[0]:.4e}, tau={popt[1]:.5f}, sigma_tau={np.sqrt(pcov[1, 1]):.5f}, C={popt[2]:.4e}")
+        print("tau: ", popt[1]*1000, " +- ", np.sqrt(np.diag(pcov))[1]*1000, "ms")
+        return popt, pcov
+
+    # ------------------------------------------------------------------
+    # figure 2: summed-up signal, experimental data and fit
+    # ------------------------------------------------------------------
+    def plot_time_and_fit(self, x, y, popt, limit, id_string="", display_fit=True, show_excluded=False):
+        keep = self.fit_mask(len(x))
+        fig, ax = self._new_figure()
+        ax.step((x-x[1])[1:], y[1:], color="C0", label="Summed-up simulated signal", where="post")
+        if show_excluded:
+            ax.plot(x[~keep], y[~keep], "o", mfc="none", color="C0", label="Excluded from fit")
+
+        if self.exp_decay_values is not None:
+            y_exp = np.asarray(self.exp_decay_values)
+            n_exp = len(y_exp)
+            print("n_exp: ", n_exp)
+            if n_exp == len(x):                  # full array: bins 0..n-1
+                x_exp, exp_keep = x, keep
+            elif n_exp == keep.sum():            # array saved AFTER the mask: use the kept time bins
+                x_exp, exp_keep = x[keep], np.ones(n_exp, dtype=bool)
+            else:
+                warnings.warn(f"exp_decay_values has {n_exp} points, x has {len(x)}: aligning from t=0, check this.")
+                x_exp, exp_keep = x[:n_exp], keep[:n_exp]
+
+            ax.plot(x_exp[:len(y_exp)], y_exp[:len(x_exp)], color="C1", label="Experimental data")
+            
+            if show_excluded and (~exp_keep).any():
+                ax.plot(x_exp[~exp_keep], y_exp[~exp_keep], "o", mfc="none", color="C1")
+
+        if display_fit:
+            ax.plot((x-x[1])[1:], Simulator.expo_func_3(x, *popt)[1:], label="Simulated fit", alpha=0.6, color="red", linestyle="--")
+
+        if self.settings_plot_titles:
+            ax.set_title(r"$\tau_{seed} =$" + f"{self.params_tau_seed:0.2e}" + " [s], " + r"$\tau =$" + f"{popt[1]:0.2e}")
+
+        self._style_axes(ax, limit, legend_loc="upper right")
+        ymax = max(np.max(np.abs(y[1:])), np.max(np.abs(self.exp_decay_values)) if self.exp_decay_values is not None else 0)
+        order = 10 ** np.floor(np.log10(ymax))      # e.g. 1e-5 if the data peak at ~3e-5
+
+        self._style_axes(ax, limit, legend_loc="upper right")
+        ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+        ax.yaxis.set_major_locator(MultipleLocator(order/2))   # ticks at 1, 2, 3 … ×order 
+        ax.yaxis.get_major_formatter().set_useOffset(True)
+        outbase = self._outpath(
+            f"{id_string}_ts{self.params_tau_seed:.2e}_t{popt[1]:.2e}_{self.simulation_duration:.2f}s"
+        )
+        self._save_figure(fig, outbase)
+        if self.settings_save_npz:
+            np.savez(outbase + ".npz", x=x, y=y, yfit=Simulator.expo_func_3(x, *popt), fit_keep=keep)
+
+    def fit_and_plot_gaussian(self, xvals, yvals, bins=100, id_string="", label=None,
+                          xlabel="Value [a.u.]", ylabel="Counts"):
+        label = label or id_string
+        counts, bin_edges = np.histogram(yvals, bins=bins)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        initial_guess = [max(counts), bin_centers[np.argmax(counts)],
+                        (max(bin_centers) - min(bin_centers)) / 4]
+
+        try:
+            popt, _ = curve_fit(Simulator.gaussian_function, bin_centers, counts, p0=initial_guess)
+            A, mu, sigma = popt[0], popt[1], abs(popt[2])
+
+            x_fit = np.linspace(min(bin_centers), max(bin_centers), 400)
+            y_fit = Simulator.gaussian_function(x_fit, *popt)
+
+            fig = plt.figure(figsize=(8, 5))
+            ax = fig.gca()
+            ax.hist(yvals, bins=bins, alpha=0.6, label=label)
+            ax.plot(x_fit, y_fit, color="red", linewidth=2,
+                    label="Gaussian fit\n" + fr"$\mu =$ {mu:0.2e}" + "\n" + fr"$\sigma =$ {sigma:.2e}")
+
+            # dashed line at the centre of the distribution
+            ax.axvline(mu, color="k", linestyle="--", linewidth=1.2)
+
+            # sigma shown directly in the plot: arrow from mu to mu+sigma at the 1-sigma height
+            y_sig = A * np.exp(-0.5)
+            ax.annotate("", xy=(mu + sigma, y_sig), xytext=(mu, y_sig),
+                        arrowprops=dict(arrowstyle="<->", color="k", lw=1.5))
+            ax.text(mu + sigma / 2, y_sig, r"$\sigma$", ha="center", va="bottom", fontsize=16,
+                    bbox=dict(facecolor="white", alpha=0.7, pad=1.0, edgecolor="none"))
+
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            if self.settings_plot_titles:
+                ax.set_title("Gaussian Fit")
+
+            legend = ax.legend(fontsize=16, loc="upper right")                 # was 14
+            #for text in legend.get_texts():
+            #    text.set_verticalalignment('center')
+
+            outfilename = self._outpath(f"{id_string}_{self.simulation_duration:.2f}s")
+            plt.tight_layout()
+            plt.savefig(outfilename + ".png", dpi=300)
+            plt.savefig(outfilename + ".svg")
+            plt.close()
+
+            if self.settings_save_npz:
+                np.savez(outfilename + ".npz", x_fit=x_fit, y_fit=y_fit, yvals=yvals)
+
+        except Exception as e:
+            logger.error(f"{e}. Can't continue any more. Please rerun the simulation.")
+            sys.exit(1)
+
+        return popt
+
+    # ------------------------------------------------------------------
+    # main loop
+    # ------------------------------------------------------------------
+    def start(self):
+        logger.info(f'Simulation tasks: {self.settings_tasks}')
+
+        # 'mle' reuses the actual decay times generated by 'addup' each trial (a genuine same-data benchmark),
+        # so it cannot run on its own.
+        if 'mle' in self.settings_tasks and 'addup' not in self.settings_tasks:
+            logger.error("'mle' requires 'addup' to also be enabled (it reuses addup's per-trial decay times).")
+            sys.exit(1)
+
+        n_trials = self.params_n_trials
+        # NaN, not 0: a failed trial must never enter the Gaussian fits as a fake data point
+        tau_events_arr = np.full(n_trials, np.nan)
+        sigma_events_arr = np.full(n_trials, np.nan)
+
+        tau_distro_arr = np.full(n_trials, np.nan)
+        sigma_distro_arr = np.full(n_trials, np.nan)
+
+        tau_mle_arr = np.full(n_trials, np.nan)
+
+        # bin starts 0, dt, 2dt, ... : exactly n_sim_steps bins
+        x = np.arange(self.params_n_sim_steps) * self.params_timestep
+
+        xvals = np.arange(
+            -self.params_tau_seed, self.params_tau_seed, 2 * self.params_tau_seed / 1000
+        )
+
+        if 'addup' in self.settings_tasks:
+            logger.info('Performing simulation task: addup')
+            n_failed = 0
+            for trial_number in tqdm(range(n_trials)):
+                try:
+                    y1, sigma_for_fit, trial_decay_times = self.create_from_events_with_fluctuations(
+                        x, trial_number, add_empty_shots=self.params_empty_shots
+                    )
+
+                    popt_events, pcov_events = self.fit_exponential(x, y1, sigma_for_fit)
+                    tau_events_arr[trial_number] = popt_events[1]
+                    sigma_events_arr[trial_number] = np.sqrt(pcov_events[1, 1])  # error of tau from the fit
+
+                    if 'mle' in self.settings_tasks:
+                        tau_mle_arr[trial_number] = self.get_mle(trial_decay_times)
+
+                    if self.settings_save_npz:
+                        np.savez(self._outpath("exp_decay_sim.npz"), x=x, y1=y1, sigma=sigma_for_fit)
+
+                    self.plot_time_and_fit(
+                        x,
+                        y1,
+                        popt_events,
+                        limit=self.params_limit,
+                        id_string=f"trial-{trial_number:04}_from_events",
+                        display_fit=True
+                    )
+
+                except (FloatingPointError, OptimizeWarning) as e:
+                    logger.warning(e)
+                    n_failed += 1
+                    continue
+
+            logger.info(f"{n_failed}/{n_trials} trials failed to fit and are excluded from the distributions.")
+            valid = np.isfinite(tau_events_arr) & np.isfinite(sigma_events_arr)
+            if valid.sum() < 10:
+                logger.error(f"Only {int(valid.sum())} valid trials -- too few for the Gaussian fits.")
+                sys.exit(1)
+
+            logger.info("Creating tau_tru distribution from add up spectra.")
+            popt = self.fit_and_plot_gaussian(
+                xvals, self.params_tau_seed - tau_events_arr[valid],
+                id_string="tau_true_addup",
+                label=r"$\tau_{\mathrm{true,addup}}$"
+                #xvals, self.params_tau_seed - tau_events_arr[valid], id_string="$\tau_{\mathrm{true,addup}}$"
+            )
+            sigma_tru_from_addup = popt[2]
+            logger.info(f"Sigma_tru from add up is = {sigma_tru_from_addup}")
+
+            logger.info("Creating sigma distribution from add up spectra.")
+
+            plt.figure()
+            plt.hist(sigma_events_arr[valid], bins=50, alpha=0.7)
+            plt.xlabel("σ_sim_old")
+            plt.ylabel("Counts")
+            plt.title("Distribution of σ_sim_old")
+            plt.tight_layout()
+            plt.savefig(self._outpath("sigma_sim_old_distribution.png"), dpi=150)
+            plt.close()
+
+            popt = self.fit_and_plot_gaussian(
+                xvals, sigma_events_arr[valid],
+                id_string="sigma_from_addup",
+                label=r"$\sigma_{\mathrm{addup}}$"
+                #xvals, sigma_events_arr[valid], id_string="$\sigma_{\mathrm{addup}}$"
+            )
+            mean_of_sigmas_from_addup = popt[1]
+            logger.info(f"Mean of sigmas from addup is = {mean_of_sigmas_from_addup}")
+
+            rho_from_addup = sigma_tru_from_addup / mean_of_sigmas_from_addup
+            logger.info(f"rho from addup = {rho_from_addup}")
+
+            logger.info("Creating the P distribion from add up.")
+            self.fit_and_plot_gaussian(
+                xvals, (self.params_tau_seed - tau_events_arr[valid]) / sigma_events_arr[valid],
+                id_string="rho",
+                label=r"$\rho$"
+                #xvals, (self.params_tau_seed - tau_events_arr[valid]) / sigma_events_arr[valid], id_string="$\rho$"
+            )
+
+            if 'mle' in self.settings_tasks:
+                logger.info("Creating tau_tru from unbinned MLE distribution (same decays as add-up).")
+                valid_mle = np.isfinite(tau_mle_arr)
+                popt_mle = self.fit_and_plot_gaussian(
+                    xvals, self.params_tau_seed - tau_mle_arr[valid_mle],
+                    id_string="tau_true_mle",
+                    label=r"$\tau_{\mathrm{true,mle}}$"
+                    #xvals, self.params_tau_seed - tau_mle_arr[valid_mle], id_string="$\tau_{\mathrm{true,mle}}$"
+                )
+                logger.info(f"Sigma_tru from MLE is = {popt_mle[2]}")
+
+        if 'distro' in self.settings_tasks:
+            logger.info('Performing simulation task: distro')
+            for trial_number in tqdm(range(n_trials)):
+                try:
+                    y2 = self.create_from_distribution(x)
+                    popt_distro, pcov_distro = self.fit_exponential(x, y2, None)
+                    tau_distro_arr[trial_number] = popt_distro[1]
+                    sigma_distro_arr[trial_number] = np.sqrt(pcov_distro[1, 1])  # error of tau from distro
+
+                    self.plot_time_and_fit(
+                        x, y2, popt_distro, self.params_limit, id_string=f'trial-{trial_number:04}_from_distro', display_fit=True)
+
+                except (FloatingPointError, OptimizeWarning) as e:
+                    logger.warning(e)
+                    continue
+
+            valid_d = np.isfinite(tau_distro_arr) & np.isfinite(sigma_distro_arr)
+            logger.info('Creating tau_tru from binned exponential distribution.')
+            popt = self.fit_and_plot_gaussian(xvals, self.params_tau_seed - tau_distro_arr[valid_d], id_string='tau_tru_from_distro')
+            sigma_tru_from_distro = popt[2]
+            logger.info(f'Sigma_tru from distro is = {sigma_tru_from_distro}')
+
+            logger.info('Creating sigma distribution from binned exponential distribution.')
+            popt = self.fit_and_plot_gaussian(xvals, sigma_distro_arr[valid_d], id_string='sigma_from_distro')
+            mean_of_sigmas_from_distro = popt[1]
+            logger.info(f'Mean of sigmas from distro = {mean_of_sigmas_from_distro}')
+
+            rho_from_distro = sigma_tru_from_distro / mean_of_sigmas_from_distro
+            logger.info(f'rho from distro = {rho_from_distro}')
+
+            logger.info('Creating the P distribion from distro.')
+            self.fit_and_plot_gaussian(xvals, (self.params_tau_seed - tau_distro_arr[valid_d]) / sigma_distro_arr[valid_d], id_string='P_from_distro')
+
+        # Scatter plot
+        logger.info("Creating the scatter plot.")
+        fig, axs = plt.subplots()
+        if 'addup' in self.settings_tasks:
+            axs.step(
+                np.arange(len(tau_events_arr)),
+                np.abs(self.params_tau_seed - tau_events_arr),
+                where="post",
+                label="tau_from_trials",
+            )
+        if 'distro' in self.settings_tasks:
+            axs.step(np.arange(len(tau_distro_arr)), np.abs(self.params_tau_seed -
+                     tau_distro_arr), where='post', label='tau_from_distro')
+        if 'mle' in self.settings_tasks:
+            axs.step(
+                np.arange(len(tau_mle_arr)),
+                self.params_tau_seed - tau_mle_arr,
+                where="post",
+                label="tau_from_mle",
+            )
+        axs.set(
+            xlabel="No. of trials",
+            ylabel=r"$\tau_{seed} - \tau_{sim}$",
+            title=r"$\tau_{seed} =$" + f"{self.params_tau_seed:0.2e}" + " [s]",
+        )
+        axs.legend(fontsize=14)
+        plt.tight_layout()
+        outfilename = self._outpath(f"scatter_{self.simulation_duration:.2f}s")
+        plt.savefig(outfilename + ".png", dpi=300)
+        plt.savefig(outfilename + ".svg")
+        plt.close()
+
+        print("=" * 60)
+        print("Aggregate plateau mean by occupancy (diagnostic check)")
+        print("=" * 60)
+        I0_check = self.params_mean_bkgnd
+        A1_check = self.params_mean_ion - self.params_mean_bkgnd
+        for n in sorted(self._diagnostic_level_by_n.keys()):
+            values = self._diagnostic_level_by_n[n]
+            observed_mean = np.mean(values)
+            theoretical = I0_check + n * A1_check
+            print(f"N={n}: observed avg={observed_mean:.4e}  theoretical={theoretical:.4e}  "
+                  f"n_segments={len(values)}")
+
+
+# -----------------
+
+class Params(BaseModel):
+    tau_seed: float
+    timestep: float
+    n_sim_steps: int
+    n_sim: int
+    n_trials: int
+    n_decay_steps: int = Field(..., ge=0, le=1)
+    mean_ion_number: float                      # non-integer means are allowed (Poisson mean)
+    noise_model: str
+    max_ions: int | None = None                 # optional: if set, clips the Poisson draws (lowers the realized mean)
+    mean_ion: float
+    stdv_ion: float
+    mean_bkgnd: float
+    stdv_bkgnd: float
+    empty_shots: bool
+    empty_shots_probability: float = Field(..., ge=0.0, le=1.0)
+    limit: int
+    seed: int | None = None
+    ion_distribution: str = "poisson"          # "poisson" or "empirical"
+    ion_distribution_file: str | None = None   # path to empirical .npy file containing initial ion numbers
+    exp_decay_file: str | None = None
+    fit_drop: list[int] = [0,1,2]              # bins excluded from the exponential fit (same as the real fit)
+
+
+class Settings(BaseModel):
+    output_path: str
+    plot_every_event: bool
+    save_npz: bool
+    tasks: list
+    plot_titles: bool
+    output_tag: str = ""                       # prefix of all output file names, e.g. "long_" / "short_"
+    figure_formats: list[str] = ["png"]        # formats of the per-trial figures, e.g. ["pdf", "png"]
+
+
+class Config(BaseModel):
+    params: Params
+    settings: Settings
+
+
+def load_and_validate_toml(file_path: str) -> Config:
+    data = toml.load(file_path)
+    return Config(**data)
+
+# -----------------
+
+def main():
+    logger.remove(0)
+    logger.add(sys.stdout, level="INFO")
+
+    parser = argparse.ArgumentParser(prog="decaysim")
+    parser.add_argument(
+        "param",
+        nargs=1,
+        type=str,
+        default=None,
+        help="Path and name of the simulation parameter file.",
+    )
+
+    # read command line args
+    args = parser.parse_args()
+
+    # load and check parameter file
+    try:
+        config = load_and_validate_toml(args.param[0])
+
+    except ValueError as e:
+        logger.error("Parameter file: " + str(e))
+        exit()
+
+    simulator = Simulator(config)
+    try:
+        simulator.start()
+    except (EOFError, KeyboardInterrupt):
+        logger.success("\nUser input cancelled. Aborting...")
+
+    logger.info("Simulation end.")
+
+
+# -----------------
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,48 @@
+# decaysim
+# Parameters and settings
+
+[params]
+
+tau_seed = 0.04831 # in [s]
+
+timestep = 0.00922  # in [s]
+n_sim_steps = 107 # approx. 5 s total, time after injection
+
+n_sim = 2459   # 32 number of simulated decays in setting 1
+n_trials = 700
+
+
+n_decay_steps = 0  # either 0 or 1
+
+ion_distribution = "empirical" 	#"poisson" or "empirical"
+mean_ion_number = 1.02 	#set if "poisson"
+max_ions = 9 	
+ion_distribution_file = "/home/carlo/Desktop/PhD/coding/git/RionSiS/notebooks/Ge/initial_ions_long.npy" 	# set if "empirical"
+exp_decay_file = "/home/carlo/Desktop/PhD/coding/results/Ge/files/Corrected data/Long_Setting/exp_decay_uncorr.npy"
+
+noise_model = "quadrature"
+#mean_ion = 1.007E-04 #9.53E-05 #
+mean_ion = 2.69E-07 #2.59E-07 
+#stdv_ion = 2.04E-05 #1.69E-05 #1.17E-05 #
+stdv_ion = 3.06E-08
+
+#mean_bkgnd = 7.18E-05
+mean_bkgnd = 2.08E-07
+#stdv_bkgnd = 2.04E-05 #1.65E-05 
+stdv_bkgnd = 4.34E-08 #3.6E-08
+
+empty_shots = false
+empty_shots_probability = 0.283
+
+limit = 500
+
+seed = 1  # fixes the RNG for reproducible runs; omit/remove for nondeterministic runs
+
+[settings]
+
+tasks = ['addup', 'mle'] # Tasks: what to simulate, like 'addup', 'distro', 'mle'i
+output_path = "./out_ge_long"
+plot_every_event = false # expect longer simulation times if set to true. applies only to addup method
+save_npz = false
+plot_titles = false # turn plot titles on or off
+
