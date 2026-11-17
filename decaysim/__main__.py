@@ -5,7 +5,7 @@ A particle decay time simulator for the investigation of the spectral add-up met
 xaratustrah@github 2022-2026
 
 Every injection: Poisson(mu) ions, exponential decay times (tau_seed), staircase I(n) = I0 + n*A1 with the
-quadrature noise model sigma(n) = A1*sqrt(sigma0^2 + (k n)^2). The injections are summed and fitted with
+noise model sigma(n)^2 = sigma(I0)^2 + beta*n + (sigma(I1)*n)^2 (beta = 0: quadrature model). The injections are summed and fitted with
 A exp(-t/tau) + C, with the noise-model error bars (absolute_sigma=False, as the fit of the real data).
 Repeated n_trials times: sigma_true = spread of tau, sigma_fit = fit error of tau, rho = sigma_true / sigma_fit.
 """
@@ -57,6 +57,7 @@ class Params(BaseModel):
     mean_ion: float                             # I1 = I0 + A1: level with one ion
     stdv_bkgnd: float = Field(..., ge=0)        # sigma(I0) = sigma0*A1: noise of an empty bin
     stdv_ion: float = Field(..., ge=0)          # sigma(I1) = k*A1: noise growth per ion
+    var_ion_lin: float = Field(0.0, ge=0)       # beta: noise variance added per ion (term linear in n; 0 = none)
     ion_number_r: float = Field(0.0, ge=0)      # width r of a negative-binomial ion number (0 = Poisson)
     sigma_fit_real: float | None = None         # [s] fit error of tau of the real data (for rho and sigma_corr)
     fit_t_start: float = Field(0.0, ge=0)       # [s] first time used in the fit (first bin = 0), same as the real fit
@@ -95,7 +96,7 @@ class Simulator:
         self.dt = p.timestep
         self.N = p.n_sim
         self.I0, self.A1 = p.mean_bkgnd, p.mean_ion - p.mean_bkgnd     # A1 = I1 - I0: single-ion step
-        self.s_bkg, self.s_ion = p.stdv_bkgnd, p.stdv_ion
+        self.s_bkg, self.s_ion, self.v_lin = p.stdv_bkgnd, p.stdv_ion, p.var_ion_lin
         self.x = np.arange(p.n_sim_steps) * self.dt  # bin starts
         self.limit_s = self.x[-1] + self.dt
         self.y_exp = self.fit_exp = None
@@ -109,11 +110,13 @@ class Simulator:
         self.out = os.path.join(s.output_path, "")
         os.makedirs(self.out, exist_ok=True)
         # error bars of the summed curve: noise model with the expected occupancy (same as RionSIS):
-        # σ_sum(t)² = N·(σ(I0)² + σ(I1)²·E[n(t)²]),  E[n²] = (1-p_empty)·(μ(t) + μ(t)²),  μ(t) = μ·exp(-t/τ)
+        # σ_sum(t)² = N·(σ(I0)² + β·E[n(t)] + σ(I1)²·E[n(t)²]),  E[n] = (1-p_empty)·μ(t),
+        # E[n²] = (1-p_empty)·(μ(t) + μ(t)²),  μ(t) = μ·exp(-t/τ)
         # (= N·A1²·(σ0² + k²·E[n²]) with σ0 = σ(I0)/A1, k = σ(I1)/A1)
         mu_t = p.mean_ion_number * np.exp(-self.x / self.tau)
         n2 = (1 - p.empty_shots_probability) * (mu_t + mu_t**2 * (1 + (1 / p.ion_number_r if p.ion_number_r else 0)))
-        self.sigma_sum = np.sqrt(self.N * (self.s_bkg**2 + self.s_ion**2 * n2))
+        n1 = (1 - p.empty_shots_probability) * mu_t
+        self.sigma_sum = np.sqrt(self.N * (self.s_bkg**2 + self.v_lin * n1 + self.s_ion**2 * n2))
         logger.info(f"output: {self.out}{s.output_tag}*   seed: {p.seed}")
 
     # ---------------------------------------------------------------- helpers
@@ -176,7 +179,7 @@ class Simulator:
                         j = int(td / self.dt)
                         if j < n_bins:
                             level[j] -= (1 - (td % self.dt) / self.dt) * self.A1
-                sigma = np.sqrt(self.s_bkg**2 + (n_alive * self.s_ion) ** 2)
+                sigma = np.sqrt(self.s_bkg**2 + self.v_lin * n_alive + (n_alive * self.s_ion) ** 2)
                 b = level + self.rng.normal(0, sigma)
             y_sum += b
             if trial == 0 and i < self.s.n_injection_plots:
